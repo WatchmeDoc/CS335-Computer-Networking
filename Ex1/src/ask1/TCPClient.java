@@ -17,7 +17,7 @@ public class TCPClient {
         //BufferedReader inFromUser =
         //        new BufferedReader(new InputStreamReader(System.in));
 
-        Socket clientSocket = new Socket("localhost", 4333);
+        Socket clientSocket = new Socket("147.52.19.22", 4333);
 
         DataOutputStream outToServer =
                 new DataOutputStream(clientSocket.getOutputStream());

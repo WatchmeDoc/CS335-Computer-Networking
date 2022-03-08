@@ -14,7 +14,7 @@ public class TCPClient {
         String get_request;
         String put_request;
         String response;
-        String host = "localhost";
+        String host = "147.52.19.22";
 
         //BufferedReader inFromUser =
         //        new BufferedReader(new InputStreamReader(System.in));
@@ -28,7 +28,7 @@ public class TCPClient {
                 new BufferedReader(new
                         InputStreamReader(clientSocket.getInputStream()));
 
-        get_request = "GET /src/ask2/index.html HTTP/1.1\nHost: "+ host + "\nAccept-Language: en-us";
+        get_request = "GET /ask2/index.html HTTP/1.1\nHost: "+ host + "\nAccept-Language: en-us";
         put_request = "PUT /new.html HTTP/1.1\nContent-type: text/html\nContent-length: 46\n<html><p>The flame is gone<br>the fire remains.</p></html>";
 
         outToServer.writeBytes(put_request + '\n');

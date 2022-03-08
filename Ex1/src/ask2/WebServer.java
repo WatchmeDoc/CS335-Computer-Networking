@@ -19,19 +19,21 @@ class WebServer {
         ServerSocket listenSocket = new ServerSocket(4333);
 
         while (true) {
-            Socket connectionSocket = listenSocket.accept();
+	    System.out.println("Web server ready at port: 4333");
+	    Socket connectionSocket = listenSocket.accept();
             BufferedReader inFromClient =
                     new BufferedReader(new InputStreamReader(connectionSocket.getInputStream()));
             DataOutputStream outToClient =
                     new DataOutputStream(connectionSocket.getOutputStream());
 
+	   
             requestMessageLine = inFromClient.readLine();
-
+	   
             StringTokenizer tokenizedLine =
                     new StringTokenizer(requestMessageLine);
             String request = tokenizedLine.nextToken();
             if (request.equals("GET")) {
-
+		System.out.println("Serving a GET request.");
                 fileName = tokenizedLine.nextToken();
 
                 if (fileName.startsWith("/") == true)
@@ -81,7 +83,8 @@ class WebServer {
                 outToClient.writeBytes(http_ver + "201 Created\n");
                 outToClient.writeBytes("Content Location: " + fileName);
                 outToClient.writeBytes("\r\n");
-
+		System.out.println("Created file " + fileName + "with contents:");
+		System.out.println(requestMessageLine);
             }
             else System.out.println("Bad Request Message");
             connectionSocket.close();
