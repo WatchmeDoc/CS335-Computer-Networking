@@ -1,4 +1,4 @@
-package ask1;
+package ask2;
 /*
  * Simple example TCPClient
  *
@@ -11,13 +11,15 @@ import java.net.*;
 public class TCPClient {
 
     public static void main(String[] argv) throws Exception {
-        String sentence;
+        String get_request;
+        String put_request;
         String response;
+        String host = "localhost";
 
         //BufferedReader inFromUser =
         //        new BufferedReader(new InputStreamReader(System.in));
 
-        Socket clientSocket = new Socket("localhost", 4333);
+        Socket clientSocket = new Socket(host, 4333);
 
         DataOutputStream outToServer =
                 new DataOutputStream(clientSocket.getOutputStream());
@@ -26,16 +28,17 @@ public class TCPClient {
                 new BufferedReader(new
                         InputStreamReader(clientSocket.getInputStream()));
 
-        sentence = "1111\n2222\n3333$";
+        get_request = "GET /src/ask2/index.html HTTP/1.1\nHost: "+ host + "\nAccept-Language: en-us";
+        put_request = "PUT /new.html HTTP/1.1\nContent-type: text/html\nContent-length: 46\n<html><p>The flame is gone<br>the fire remains.</p></html>";
 
-        outToServer.writeBytes(sentence + '\n');
+        outToServer.writeBytes(put_request + '\n');
 
         response = inFromServer.readLine();
+        System.out.println("FROM SERVER:");
         while (response != null){
-            System.out.println("FROM SERVER: " + response);
+            System.out.println(response);
             response = inFromServer.readLine();
         }
-
 
         clientSocket.close();
 
