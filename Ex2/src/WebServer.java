@@ -51,13 +51,47 @@ public class WebServer {
         String request = "JOIN " + this.serverID + " " + this.port + " " + this.host;
         outToServer.writeBytes(request + '\n');
         String response = inFromServer.readLine();
-        System.out.println("FROM SERVER:");
-        while (response != null) {
-            System.out.println(response);
-            response = inFromServer.readLine();
+        if(response.equals("ACK")){
+            this.setNextServerID(Integer.parseInt(inFromServer.readLine()));
+            String[] list = inFromServer.readLine().split(",");
+            for (String s : list) {
+                StringTokenizer serverNode = new StringTokenizer(s);
+                int id = Integer.parseInt(serverNode.nextToken());
+                int currPort = Integer.parseInt(serverNode.nextToken());
+                String currHost = serverNode.nextToken();
+                this.addToServerList(currPort, id, currHost);
+            }
+            System.out.println("Server list updated successfully. New list:");
+            System.out.println(this.getServerListString());
+
+        } else{
+            System.out.println("Server insertion failed. Response from other server(s):");
+            while (response != null) {
+                System.out.println(response);
+                response = inFromServer.readLine();
+            }
         }
-        // TODO add server list
+
+
         clientSocket.close();
+    }
+
+    /***
+     * Send a message to the next server in the grid, if such server exists.
+     * @param msg The message to deliver to the next server.
+     * @throws IOException If socket fails to close.
+     */
+    public void echoToNext(String msg) throws IOException {
+        ServerListNode next = this.getServerWithID(this.nextServerID);
+        if(next != null){
+            Socket clientSocket = new Socket(next.host, next.port);
+            DataOutputStream outToServer =
+                    new DataOutputStream(clientSocket.getOutputStream());
+
+            outToServer.writeBytes(msg + "\r\n");
+            clientSocket.close();
+        }
+
     }
 
     /***
@@ -94,6 +128,9 @@ public class WebServer {
         this.host = host;
     }
 
+    private ServerListNode getServerWithID(int id){
+        return this.serverHashMap.get(id);
+    }
     /***
      * Getter for the adjacent serverID.
      * @return nextServerID if it exists, otherwise return this server's ID.
@@ -142,8 +179,8 @@ public class WebServer {
      */
     public String getServerListString() {
         return this.serverHashMap.keySet().stream()
-                .map(key -> key + "=" + this.serverHashMap.get(key).toString())
-                .collect(Collectors.joining(", ", "{", "}"));
+                .map(key -> key + " " + this.serverHashMap.get(key).toString())
+                .collect(Collectors.joining(", "));
     }
 
     /***
@@ -179,6 +216,9 @@ class RequestHandler implements Runnable {
         this.server = server;
     }
 
+    /***
+     * Main thread function. Handles the request provided to the constructor.
+     */
     @Override
     public void run() {
         String request = this.tokenizedRequestLine.nextToken();
@@ -198,14 +238,16 @@ class RequestHandler implements Runnable {
                 String response;
                 response = String.valueOf(this.server.getNextServerID());
                 try {
-                    this.ACKNOWLEDGE(response + " " + serverList);
-
+                    this.ACKNOWLEDGE(response + "\r\n" + serverList);
+                    // 4. Inform other servers for the insertion of a new one
+                    this.server.echoToNext("BIRTH " + id + " " + port + " " + host  + " " + this.server.getServerID());
                 } catch (IOException e) {
                     System.out.println("Failed to close socket.");
                     e.printStackTrace();
                 }
-                // 4. Change this server's next server
+                // 5. Change this server's next server
                 this.server.setNextServerID(id);
+
 
             } else {
                 try {
@@ -216,17 +258,42 @@ class RequestHandler implements Runnable {
                 }
             }
 
+        } else if(request.equals("BIRTH")){ // If a new server was inserted somewhere in the grid
+            int id = Integer.parseInt(this.tokenizedRequestLine.nextToken());
+            int port = Integer.parseInt(this.tokenizedRequestLine.nextToken());
+            String host = this.tokenizedRequestLine.nextToken();
+            int senderID = Integer.parseInt(this.tokenizedRequestLine.nextToken());
+
+            if(senderID != this.server.getServerID()){ // ... and our server didn't send the message
+                System.out.println("Adding server with id: " + id + " and port: " + port + " to the list.");
+                this.server.addToServerList(port, id, host);
+                try {
+                    this.server.echoToNext("BIRTH " + id + " " + port + " " + host + " " + senderID);
+                } catch (IOException e) {
+                    System.out.println("Failed to close socket.");
+                    e.printStackTrace();
+                }
+            }
         }
 
 
     }
 
+    /***
+     * Send an ACK message to the output stream, along with a message.
+     * @param s the message for the client.
+     * @throws IOException if socket fails to close.
+     */
     private void ACKNOWLEDGE(String s) throws IOException {
         this.outputStream.writeBytes("ACK\r\n");
         this.outputStream.writeBytes(s + "\r\n");
         socket.close();
     }
-
+    /***
+     * Send an NAK message to the output stream, along with a message.
+     * @param s the message for the client.
+     * @throws IOException if socket fails to close.
+     */
     private void NEGATIVE_ACK(String s) throws IOException {
         this.outputStream.writeBytes("NAK\r\n");
         this.outputStream.writeBytes(s + "\r\n");
