@@ -73,7 +73,7 @@ public class WebServer {
     }
 
     public void updateServerList(String[] list) {
-
+        this.serverHashMap.clear();
         for (String s : list) {
             StringTokenizer serverNode = new StringTokenizer(s);
             int id = Integer.parseInt(serverNode.nextToken());
@@ -269,8 +269,8 @@ public class WebServer {
                     int deadServerID = nextServerID;
                     removeFromServerList(nextServerID);
                     try {
-                        // DEATH <deadServerID> <senderID> <sender's new next server>
-                        echoToNext("DEATH " + deadServerID + " " + serverID + " " + nextServerID);
+                        // UPDATE_LIST <sender ID> <server list>
+                        echoToNext("UPDATE_LIST " + serverID + " " + getServerListString());
                     } catch (IOException ioException) {
                         System.out.println("Failed to close socket.");
                         ioException.printStackTrace();
@@ -344,8 +344,6 @@ class RequestHandler implements Runnable {
             }
             case "UPDATE_LIST": { // UPDATE_LIST <sender ID> <server list>
                 int senderID = Integer.parseInt(this.tokenizedRequestLine.nextToken());
-
-
                 if (senderID != this.server.getServerID()) { // ... and our server didn't send the message
 
                     try {
@@ -373,25 +371,7 @@ class RequestHandler implements Runnable {
                 }
 
                 break;
-            case "DEATH": // DEATH <deadServerID> <senderID> <sender's new next server>
-                int deadServerID = Integer.parseInt(this.tokenizedRequestLine.nextToken());
-                int senderID = Integer.parseInt(this.tokenizedRequestLine.nextToken());
-                int nextSenderServerID = Integer.parseInt(this.tokenizedRequestLine.nextToken());
-                if(senderID != this.server.getServerID()){
-                    this.server.updateHashMapNextId(senderID, nextSenderServerID);
-                    this.server.removeFromServerList(deadServerID);
-                    System.out.println("New hashmap:");
-                    System.out.println(this.server.getServerListString());
 
-                    try {
-                        this.ACKNOWLEDGE(null);
-                        // DEATH <deadServerID> <senderID> <sender's new next server>
-                        this.server.echoToNext("DEATH " + deadServerID + " " + senderID + " " + nextSenderServerID);
-                    } catch (IOException e) {
-                        System.out.println("Failed to close socket.");
-                        e.printStackTrace();
-                    }
-                }
 
         }
 
