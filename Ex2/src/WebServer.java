@@ -56,16 +56,7 @@ public class WebServer {
         String response = inFromServer.readLine();
         if (response.equals("ACK")) {
             this.setNextServerID(Integer.parseInt(inFromServer.readLine()));
-            String[] list = inFromServer.readLine().split(",");
-            for (String s : list) {
-                StringTokenizer serverNode = new StringTokenizer(s);
-                int id = Integer.parseInt(serverNode.nextToken());
-                int currPort = Integer.parseInt(serverNode.nextToken());
-                String currHost = serverNode.nextToken();
-                int nextServerID = Integer.parseInt(serverNode.nextToken());
-
-                this.addToServerList(currPort, id, currHost, nextServerID);
-            }
+            this.updateServerList(inFromServer.readLine().split(","));
             System.out.println("Server list updated successfully. New list:");
             System.out.println(this.getServerListString());
 
@@ -79,6 +70,21 @@ public class WebServer {
 
 
         clientSocket.close();
+    }
+
+    public void updateServerList(String[] list) {
+
+        for (String s : list) {
+            StringTokenizer serverNode = new StringTokenizer(s);
+            int id = Integer.parseInt(serverNode.nextToken());
+            int currPort = Integer.parseInt(serverNode.nextToken());
+            String currHost = serverNode.nextToken();
+            int nextServerID = Integer.parseInt(serverNode.nextToken());
+
+            this.addToServerList(currPort, id, currHost, nextServerID);
+        }
+        System.out.println("List updated:");
+        System.out.println(this.serverHashMap);
     }
 
     /***
@@ -319,8 +325,8 @@ class RequestHandler implements Runnable {
                     try {
                         this.ACKNOWLEDGE(response + "\r\n" + serverList);
                         // 5. Inform other servers for the insertion of a new one
-                        // BIRTH <new server ID> <new server port> <new server host> <new server's next server> <sender ID>
-                        this.server.echoToNext("BIRTH " + id + " " + port + " " + host + " " + response + " " + this.server.getServerID());
+                        // UPDATE_LIST <sender ID> <server list>
+                        this.server.echoToNext("UPDATE_LIST " + this.server.getServerID() + " " + serverList);
                     } catch (IOException e) {
                         System.out.println("Failed to close socket.");
                         e.printStackTrace();
@@ -336,21 +342,21 @@ class RequestHandler implements Runnable {
 
                 break;
             }
-            case "BIRTH": { // BIRTH <new server ID> <new server port> <new server host> <new server's next server> <sender ID>
-                // If a new server was inserted somewhere in the grid
-                int id = Integer.parseInt(this.tokenizedRequestLine.nextToken());
-                int port = Integer.parseInt(this.tokenizedRequestLine.nextToken());
-                String host = this.tokenizedRequestLine.nextToken();
-                int nextServerID = Integer.parseInt(this.tokenizedRequestLine.nextToken());
+            case "UPDATE_LIST": { // UPDATE_LIST <sender ID> <server list>
                 int senderID = Integer.parseInt(this.tokenizedRequestLine.nextToken());
 
 
                 if (senderID != this.server.getServerID()) { // ... and our server didn't send the message
-                    System.out.println("Adding server with id: " + id + " and port: " + port + " to the list.");
-                    this.server.addToServerList(port, id, host, nextServerID);
+
                     try {
                         this.ACKNOWLEDGE(null);
-                        this.server.echoToNext("BIRTH " + id + " " + port + " " + host + " " + nextServerID + " " + senderID);
+                        StringBuilder list = new StringBuilder();
+                        while (this.tokenizedRequestLine.hasMoreTokens()) {
+                            list.append(this.tokenizedRequestLine.nextToken()).append(" ");
+                        }
+
+                        this.server.updateServerList(list.toString().split(","));
+                        this.server.echoToNext("UPDATE_LIST " + senderID + " " + list.toString());
                     } catch (IOException e) {
                         System.out.println("Failed to close socket.");
                         e.printStackTrace();
