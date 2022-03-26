@@ -15,6 +15,8 @@ public class WebServer {
     private int nextServerID;
     private ServerSocket listenSocket;
     private int serverID;
+    // Modify this to set the sleeptime frequency
+    private static final int SLEEPTIME = 10000;
 
 
     public WebServer(int port, String host, int serverID) {
@@ -23,7 +25,7 @@ public class WebServer {
         this.listenSocket = null;
         this.serverID = serverID;
         this.serverHashMap = new HashMap<>();
-        this.addToServerList(port, serverID, host);
+        this.addToServerList(port, serverID, host, 0);
     }
 
     /***
@@ -48,10 +50,11 @@ public class WebServer {
         BufferedReader inFromServer =
                 new BufferedReader(new
                         InputStreamReader(clientSocket.getInputStream()));
+        // JOIN <new server ID> <new server port> <new server host>
         String request = "JOIN " + this.serverID + " " + this.port + " " + this.host;
         outToServer.writeBytes(request + '\n');
         String response = inFromServer.readLine();
-        if(response.equals("ACK")){
+        if (response.equals("ACK")) {
             this.setNextServerID(Integer.parseInt(inFromServer.readLine()));
             String[] list = inFromServer.readLine().split(",");
             for (String s : list) {
@@ -59,12 +62,14 @@ public class WebServer {
                 int id = Integer.parseInt(serverNode.nextToken());
                 int currPort = Integer.parseInt(serverNode.nextToken());
                 String currHost = serverNode.nextToken();
-                this.addToServerList(currPort, id, currHost);
+                int nextServerID = Integer.parseInt(serverNode.nextToken());
+
+                this.addToServerList(currPort, id, currHost, nextServerID);
             }
             System.out.println("Server list updated successfully. New list:");
             System.out.println(this.getServerListString());
 
-        } else{
+        } else {
             System.out.println("Server insertion failed. Response from other server(s):");
             while (response != null) {
                 System.out.println(response);
@@ -83,12 +88,21 @@ public class WebServer {
      */
     public void echoToNext(String msg) throws IOException {
         ServerListNode next = this.getServerWithID(this.nextServerID);
-        if(next != null){
+        if (next != null) { // essentially if there is no next server
             Socket clientSocket = new Socket(next.host, next.port);
             DataOutputStream outToServer =
                     new DataOutputStream(clientSocket.getOutputStream());
-
+            BufferedReader inFromServer =
+                    new BufferedReader(new
+                            InputStreamReader(clientSocket.getInputStream()));
             outToServer.writeBytes(msg + "\r\n");
+
+            String response = inFromServer.readLine();
+
+            while (response != null){
+                System.out.println("Other Server: " + response);
+                response = inFromServer.readLine();
+            }
             clientSocket.close();
         }
 
@@ -99,11 +113,13 @@ public class WebServer {
      * @throws IOException if clientSocket throws one.
      */
     public void run() throws IOException {
-        // Standby and listen to your socket
+        // Nurse to check the next server's health.
+        Thread nurse = new Thread(new HealthWorker(SLEEPTIME));
+        nurse.start();
         while (true) {
+            // Standby and listen to your socket
             System.out.println("Server waiting for new requests.");
-            Socket connectionSocket;
-            connectionSocket = listenSocket.accept();
+            Socket connectionSocket = listenSocket.accept();
 
             BufferedReader inFromClient =
                     new BufferedReader(new InputStreamReader(connectionSocket.getInputStream()));
@@ -128,9 +144,10 @@ public class WebServer {
         this.host = host;
     }
 
-    private ServerListNode getServerWithID(int id){
+    private ServerListNode getServerWithID(int id) {
         return this.serverHashMap.get(id);
     }
+
     /***
      * Getter for the adjacent serverID.
      * @return nextServerID if it exists, otherwise return this server's ID.
@@ -144,6 +161,7 @@ public class WebServer {
 
     void setNextServerID(int nextServerID) {
         this.nextServerID = nextServerID;
+        this.serverHashMap.get(this.serverID).nextServerID = nextServerID;
     }
 
     public ServerSocket getListenSocket() {
@@ -165,14 +183,27 @@ public class WebServer {
      * @param host server's host
      * @return true if there is no server with such ID, otherwise false
      */
-    public boolean addToServerList(int port, int id, String host) {
+    public boolean addToServerList(int port, int id, String host, int nextServerID) {
         if (this.serverHashMap.containsKey(id)) {
             return false;
         }
-        this.serverHashMap.put(id, new ServerListNode(port, host));
+        this.serverHashMap.put(id, new ServerListNode(port, host, nextServerID));
         return true;
     }
 
+    public void removeFromServerList(int id) {
+        if (this.serverHashMap.containsKey(id)) {
+            // 1. remove him from the map
+            ServerListNode deadServer = this.serverHashMap.remove(id);
+            if(id == this.nextServerID){ // if its the next server from our server, update the list.
+                this.setNextServerID(deadServer.nextServerID);
+            }
+        }
+    }
+
+    public void updateHashMapNextId(int id, int nextServerID){
+        this.serverHashMap.get(id).nextServerID = nextServerID;
+    }
     /***
      * Get Server List as a string
      * @return a string containing all servers connected to the grid
@@ -186,17 +217,60 @@ public class WebServer {
     /***
      * Wrapper class that only serves as a packaging method
      */
-    private class ServerListNode {
+    private static class ServerListNode {
+
         int port;
         String host;
+        int nextServerID;
 
-        ServerListNode(int port, String host) {
+        ServerListNode(int port, String host, int nextServerID) {
             this.port = port;
             this.host = host;
+            this.nextServerID = nextServerID;
+        }
+
+        @Override
+        public String toString() {
+            return this.port + " " + this.host + " " + this.nextServerID;
+        }
+
+
+    }
+
+    /***
+     * A health worker class which frequently checks if the next server is alive or not.
+     */
+    private class HealthWorker implements Runnable {
+        private final int sleepTime;
+        HealthWorker(){
+            this.sleepTime = 5000;
+        }
+        HealthWorker(int sleepTime){
+            this.sleepTime = sleepTime;
         }
         @Override
-        public String toString(){
-            return this.port + " " + this.host;
+        public void run() {
+            while (true) {
+                try {
+                    // HEALTHCHECK
+                    echoToNext("HEALTHCHECK");
+                    Thread.sleep(sleepTime);
+                } catch (InterruptedException e) {
+                    System.out.println("WHOOOO DARES TO WAKE ME UP?!");
+                    e.printStackTrace();
+                } catch (IOException e) {
+                    System.out.println("Next server is dead.");
+                    int deadServerID = nextServerID;
+                    removeFromServerList(nextServerID);
+                    try {
+                        // DEATH <deadServerID> <senderID> <sender's new next server>
+                        echoToNext("DEATH " + deadServerID + " " + serverID + " " + nextServerID);
+                    } catch (IOException ioException) {
+                        System.out.println("Failed to close socket.");
+                        ioException.printStackTrace();
+                    }
+                }
+            }
         }
     }
 }
@@ -225,55 +299,94 @@ class RequestHandler implements Runnable {
         System.out.println("Handling request " + request);
 
         // if there is a JOIN request from another server:
-        if (request.equals("JOIN")) {
-            // 1. Get server info from the request.
-            int id = Integer.parseInt(this.tokenizedRequestLine.nextToken());
-            int port = Integer.parseInt(this.tokenizedRequestLine.nextToken());
-            String host = this.tokenizedRequestLine.nextToken();
-            String serverList = this.server.getServerListString();
-            // 2. Try to add server to the HashMap. If ID is not unique then respond NAK.
-            if (this.server.addToServerList(port, id, host)) {
-                // 3. Respond ACK and tell him his adjacent server id, along with the server list.
+        switch (request) {
+            case "JOIN": { // JOIN <new server ID> <new server port> <new server host>
+                // 1. Get server info from the request.
+                int id = Integer.parseInt(this.tokenizedRequestLine.nextToken());
+                int port = Integer.parseInt(this.tokenizedRequestLine.nextToken());
+                String host = this.tokenizedRequestLine.nextToken();
+                String response = String.valueOf(this.server.getNextServerID());
 
-                String response;
-                response = String.valueOf(this.server.getNextServerID());
-                try {
-                    this.ACKNOWLEDGE(response + "\r\n" + serverList);
-                    // 4. Inform other servers for the insertion of a new one
-                    this.server.echoToNext("BIRTH " + id + " " + port + " " + host  + " " + this.server.getServerID());
-                } catch (IOException e) {
-                    System.out.println("Failed to close socket.");
-                    e.printStackTrace();
+
+                // 2. Try to add server to the HashMap. If ID is not unique then respond NAK.
+                if (this.server.addToServerList(port, id, host, this.server.getNextServerID())) {
+                    // 3. Respond ACK and tell him his adjacent server id, along with the server list.
+
+                    // 4. Change this server's next server
+                    this.server.setNextServerID(id);
+                    String serverList = this.server.getServerListString();
+
+                    try {
+                        this.ACKNOWLEDGE(response + "\r\n" + serverList);
+                        // 5. Inform other servers for the insertion of a new one
+                        // BIRTH <new server ID> <new server port> <new server host> <new server's next server> <sender ID>
+                        this.server.echoToNext("BIRTH " + id + " " + port + " " + host + " " + response + " " + this.server.getServerID());
+                    } catch (IOException e) {
+                        System.out.println("Failed to close socket.");
+                        e.printStackTrace();
+                    }
+                } else {
+                    try {
+                        this.NEGATIVE_ACK("Server ID already exists!");
+                    } catch (IOException e) {
+                        System.out.println("Failed to close socket.");
+                        e.printStackTrace();
+                    }
                 }
-                // 5. Change this server's next server
-                this.server.setNextServerID(id);
 
-
-            } else {
-                try {
-                    this.NEGATIVE_ACK("Server ID already exists!");
-                } catch (IOException e) {
-                    System.out.println("Failed to close socket.");
-                    e.printStackTrace();
-                }
+                break;
             }
+            case "BIRTH": { // BIRTH <new server ID> <new server port> <new server host> <new server's next server> <sender ID>
+                // If a new server was inserted somewhere in the grid
+                int id = Integer.parseInt(this.tokenizedRequestLine.nextToken());
+                int port = Integer.parseInt(this.tokenizedRequestLine.nextToken());
+                String host = this.tokenizedRequestLine.nextToken();
+                int nextServerID = Integer.parseInt(this.tokenizedRequestLine.nextToken());
+                int senderID = Integer.parseInt(this.tokenizedRequestLine.nextToken());
 
-        } else if(request.equals("BIRTH")){ // If a new server was inserted somewhere in the grid
-            int id = Integer.parseInt(this.tokenizedRequestLine.nextToken());
-            int port = Integer.parseInt(this.tokenizedRequestLine.nextToken());
-            String host = this.tokenizedRequestLine.nextToken();
-            int senderID = Integer.parseInt(this.tokenizedRequestLine.nextToken());
 
-            if(senderID != this.server.getServerID()){ // ... and our server didn't send the message
-                System.out.println("Adding server with id: " + id + " and port: " + port + " to the list.");
-                this.server.addToServerList(port, id, host);
+                if (senderID != this.server.getServerID()) { // ... and our server didn't send the message
+                    System.out.println("Adding server with id: " + id + " and port: " + port + " to the list.");
+                    this.server.addToServerList(port, id, host, nextServerID);
+                    try {
+                        this.ACKNOWLEDGE(null);
+                        this.server.echoToNext("BIRTH " + id + " " + port + " " + host + " " + nextServerID + " " + senderID);
+                    } catch (IOException e) {
+                        System.out.println("Failed to close socket.");
+                        e.printStackTrace();
+                    }
+                }
+                break;
+            }
+            case "HEALTHCHECK": // HEALTHCHECK
                 try {
-                    this.server.echoToNext("BIRTH " + id + " " + port + " " + host + " " + senderID);
+                    this.ACKNOWLEDGE(null);
                 } catch (IOException e) {
                     System.out.println("Failed to close socket.");
                     e.printStackTrace();
                 }
-            }
+
+                break;
+            case "DEATH": // DEATH <deadServerID> <senderID> <sender's new next server>
+                int deadServerID = Integer.parseInt(this.tokenizedRequestLine.nextToken());
+                int senderID = Integer.parseInt(this.tokenizedRequestLine.nextToken());
+                int nextSenderServerID = Integer.parseInt(this.tokenizedRequestLine.nextToken());
+                if(senderID != this.server.getServerID()){
+                    this.server.updateHashMapNextId(senderID, nextSenderServerID);
+                    this.server.removeFromServerList(deadServerID);
+                    System.out.println("New hashmap:");
+                    System.out.println(this.server.getServerListString());
+
+                    try {
+                        this.ACKNOWLEDGE(null);
+                        // DEATH <deadServerID> <senderID> <sender's new next server>
+                        this.server.echoToNext("DEATH " + deadServerID + " " + senderID + " " + nextSenderServerID);
+                    } catch (IOException e) {
+                        System.out.println("Failed to close socket.");
+                        e.printStackTrace();
+                    }
+                }
+
         }
 
 
@@ -281,22 +394,28 @@ class RequestHandler implements Runnable {
 
     /***
      * Send an ACK message to the output stream, along with a message.
-     * @param s the message for the client.
+     * @param s the message for the client. If s is null, it just sends an ACK.
      * @throws IOException if socket fails to close.
      */
     private void ACKNOWLEDGE(String s) throws IOException {
         this.outputStream.writeBytes("ACK\r\n");
-        this.outputStream.writeBytes(s + "\r\n");
+        if (s != null) {
+            this.outputStream.writeBytes(s + "\r\n");
+        }
+
         socket.close();
     }
+
     /***
      * Send an NAK message to the output stream, along with a message.
-     * @param s the message for the client.
+     * @param s the message for the client. If s is null, it just sends an NAK.
      * @throws IOException if socket fails to close.
      */
     private void NEGATIVE_ACK(String s) throws IOException {
         this.outputStream.writeBytes("NAK\r\n");
-        this.outputStream.writeBytes(s + "\r\n");
+        if (s != null) {
+            this.outputStream.writeBytes(s + "\r\n");
+        }
         socket.close();
     }
 }
