@@ -9,15 +9,17 @@ import java.util.StringTokenizer;
 import java.util.stream.Collectors;
 
 public class WebServer {
+    // Modify this to set the sleeptime frequency
+    private static final int SLEEPTIME = 20000;
+    public static String REQUEST_SUFFIX = "$$";
     private final int port;
     private final HashMap<Integer, ServerListNode> serverHashMap;
-    private String host;
+    private final HashMap<String, String> files;
+    private final String host;
+    private final int serverID;
     private int nextServerID;
     private ServerSocket listenSocket;
-    private int serverID;
-    // Modify this to set the sleeptime frequency
-    private static final int SLEEPTIME = 10000;
-
+    private int requestID;
 
     public WebServer(int port, String host, int serverID) {
         this.port = port;
@@ -26,6 +28,8 @@ public class WebServer {
         this.serverID = serverID;
         this.serverHashMap = new HashMap<>();
         this.addToServerList(port, serverID, host, 0);
+        this.files = new HashMap<>();
+        this.requestID = 1;
     }
 
     /***
@@ -37,6 +41,7 @@ public class WebServer {
 
         System.out.println("Server ready at port: " + this.port + " with ip: " + this.host);
     }
+
 
     /***
      * Connect current server with the other Web Servers.
@@ -52,7 +57,7 @@ public class WebServer {
                         InputStreamReader(clientSocket.getInputStream()));
         // JOIN <new server ID> <new server port> <new server host>
         String request = "JOIN " + this.serverID + " " + this.port + " " + this.host;
-        outToServer.writeBytes(request + '\n');
+        this.sendRequest(request, outToServer);
         String response = inFromServer.readLine();
         if (response.equals("ACK")) {
             this.setNextServerID(Integer.parseInt(inFromServer.readLine()));
@@ -62,7 +67,7 @@ public class WebServer {
 
         } else {
             System.out.println("Server insertion failed. Response from other server(s):");
-            while (response != null) {
+            while (!response.equals(REQUEST_SUFFIX)) {
                 System.out.println(response);
                 response = inFromServer.readLine();
             }
@@ -71,6 +76,17 @@ public class WebServer {
 
         clientSocket.close();
     }
+
+    /***
+     * Send a request to the output stream including the request SUFFIX.
+     * @param request The request to be delivered to the output stream
+     * @param output The output stream
+     * @throws IOException If I/O exception occurs.
+     */
+    public void sendRequest(String request, DataOutputStream output) throws IOException {
+        output.writeBytes(request + "\r\n" + REQUEST_SUFFIX + "\r\n");
+    }
+
 
     public void updateServerList(String[] list) {
         this.serverHashMap.clear();
@@ -83,8 +99,6 @@ public class WebServer {
 
             this.addToServerList(currPort, id, currHost, nextServerID);
         }
-        System.out.println("List updated:");
-        System.out.println(this.serverHashMap);
     }
 
     /***
@@ -92,7 +106,7 @@ public class WebServer {
      * @param msg The message to deliver to the next server.
      * @throws IOException If socket fails to close.
      */
-    public void echoToNext(String msg) throws IOException {
+    public String echoToNext(String msg) throws IOException {
         ServerListNode next = this.getServerWithID(this.nextServerID);
         if (next != null) { // essentially if there is no next server
             Socket clientSocket = new Socket(next.host, next.port);
@@ -101,17 +115,19 @@ public class WebServer {
             BufferedReader inFromServer =
                     new BufferedReader(new
                             InputStreamReader(clientSocket.getInputStream()));
-            outToServer.writeBytes(msg + "\r\n");
+            this.sendRequest(msg, outToServer);
 
-            String response = inFromServer.readLine();
+            StringBuilder response = new StringBuilder();
+            String line = inFromServer.readLine();
 
-            while (response != null){
-                System.out.println("Other Server: " + response);
-                response = inFromServer.readLine();
+            while (!line.equals(REQUEST_SUFFIX)) {
+                response.append(line).append('\n');
+                line = inFromServer.readLine();
             }
             clientSocket.close();
+            return response.toString();
         }
-
+        return null;
     }
 
     /***
@@ -124,32 +140,26 @@ public class WebServer {
         nurse.start();
         while (true) {
             // Standby and listen to your socket
-            System.out.println("Server waiting for new requests.");
+            System.out.println("Server waiting for request no." + this.requestID);
             Socket connectionSocket = listenSocket.accept();
-
+            this.requestID += 1;
             BufferedReader inFromClient =
                     new BufferedReader(new InputStreamReader(connectionSocket.getInputStream()));
             DataOutputStream outToClient =
                     new DataOutputStream(connectionSocket.getOutputStream());
             // Assign a worker (thread) to handle the request and keep on listening
-            Thread worker = new Thread(new RequestHandler(this, connectionSocket, inFromClient, outToClient));
+            Thread worker = new Thread(new RequestHandler(this, connectionSocket, inFromClient, outToClient, this.requestID));
             worker.start();
+
 
         }
     }
 
-    public int getPort() {
-        return port;
-    }
-
-    public String getHost() {
-        return host;
-    }
-
-    void setHost(String host) {
-        this.host = host;
-    }
-
+    /***
+     * Getter for the server hashmap
+     * @param id a key value for the server hashmap
+     * @return ServerListNode with serverID == id
+     */
     private ServerListNode getServerWithID(int id) {
         return this.serverHashMap.get(id);
     }
@@ -165,22 +175,23 @@ public class WebServer {
             return this.serverID;
     }
 
+    /***
+     * Change next serverID while updating the hashmap as well
+     * @param nextServerID new adjacent server's ID.
+     */
     void setNextServerID(int nextServerID) {
         this.nextServerID = nextServerID;
         this.serverHashMap.get(this.serverID).nextServerID = nextServerID;
     }
 
-    public ServerSocket getListenSocket() {
-        return listenSocket;
-    }
-
+    /***
+     * Getter for server's ID parameter.
+     * @return server ID.
+     */
     public int getServerID() {
         return serverID;
     }
 
-    public void setServerID(int serverID) {
-        this.serverID = serverID;
-    }
 
     /***
      * Adds server to server hash map
@@ -197,19 +208,20 @@ public class WebServer {
         return true;
     }
 
+    /***
+     * Remove a server from the server list. Used when someone detects a dead server.
+     * @param id The dead server's ID
+     */
     public void removeFromServerList(int id) {
         if (this.serverHashMap.containsKey(id)) {
             // 1. remove him from the map
             ServerListNode deadServer = this.serverHashMap.remove(id);
-            if(id == this.nextServerID){ // if its the next server from our server, update the list.
+            if (id == this.nextServerID) { // if its the next server from our server, update the list.
                 this.setNextServerID(deadServer.nextServerID);
             }
         }
     }
 
-    public void updateHashMapNextId(int id, int nextServerID){
-        this.serverHashMap.get(id).nextServerID = nextServerID;
-    }
     /***
      * Get Server List as a string
      * @return a string containing all servers connected to the grid
@@ -218,6 +230,33 @@ public class WebServer {
         return this.serverHashMap.keySet().stream()
                 .map(key -> key + " " + this.serverHashMap.get(key).toString())
                 .collect(Collectors.joining(", "));
+    }
+
+    /***
+     * Add file to the file hashmap.
+     * @param key the file's name.
+     * @param value the file's contents.
+     */
+    public void addFile(String key, String value) {
+        this.files.put(key, value);
+    }
+
+    /***
+     * Check if the file hashmap contains a specific file.
+     * @param key the file's name
+     * @return true if found, else false.
+     */
+    public boolean containsFile(String key) {
+        return this.files.containsKey(key);
+    }
+
+    /***
+     * Get file from file hashmap
+     * @param key file's name
+     * @return the file with the matching filename. If file doesn't exist, returns null.
+     */
+    public String getFile(String key) {
+        return this.files.get(key);
     }
 
     /***
@@ -248,31 +287,31 @@ public class WebServer {
      */
     private class HealthWorker implements Runnable {
         private final int sleepTime;
-        HealthWorker(){
-            this.sleepTime = 5000;
-        }
-        HealthWorker(int sleepTime){
+
+        HealthWorker(int sleepTime) {
             this.sleepTime = sleepTime;
         }
+
         @Override
         public void run() {
             while (true) {
                 try {
-                    // HEALTHCHECK
-                    echoToNext("HEALTHCHECK");
                     Thread.sleep(sleepTime);
+                    // HEALTHCHECK
+                    System.out.println("\nDoctor: I'll check on the next server.");
+                    String response = echoToNext("HEALTHCHECK");
+                    System.out.println("Doctor: Server responded \"" + response.trim() + "\"\n");
                 } catch (InterruptedException e) {
                     System.out.println("WHOOOO DARES TO WAKE ME UP?!");
                     e.printStackTrace();
-                } catch (IOException e) {
-                    System.out.println("Next server is dead.");
-                    int deadServerID = nextServerID;
+                } catch (IOException e) { // If the adjacent server is dead.
+                    System.out.println("\nDoctor: Next server is dead.\n");
                     removeFromServerList(nextServerID);
                     try {
                         // UPDATE_LIST <sender ID> <server list>
                         echoToNext("UPDATE_LIST " + serverID + " " + getServerListString());
                     } catch (IOException ioException) {
-                        System.out.println("Failed to close socket.");
+                        System.out.println("Doctor: Failed to close socket.");
                         ioException.printStackTrace();
                     }
                 }
@@ -284,16 +323,20 @@ public class WebServer {
 class RequestHandler implements Runnable {
 
     StringTokenizer tokenizedRequestLine;
+    BufferedReader fromClient;
     DataOutputStream outputStream;
     Socket socket;
     WebServer server;
+    int requestID;
 
-    RequestHandler(WebServer server, Socket socket, BufferedReader fromClient, DataOutputStream toClient) throws IOException {
+    RequestHandler(WebServer server, Socket socket, BufferedReader fromClient, DataOutputStream toClient, int id) throws IOException {
         String requestMessageLine = fromClient.readLine();
+        this.fromClient = fromClient;
         this.tokenizedRequestLine = new StringTokenizer(requestMessageLine);
         this.outputStream = toClient;
         this.socket = socket;
         this.server = server;
+        this.requestID = id;
     }
 
     /***
@@ -302,7 +345,7 @@ class RequestHandler implements Runnable {
     @Override
     public void run() {
         String request = this.tokenizedRequestLine.nextToken();
-        System.out.println("Handling request " + request);
+        System.out.println(this.requestID + ": Handling request " + request);
 
         // if there is a JOIN request from another server:
         switch (request) {
@@ -328,14 +371,14 @@ class RequestHandler implements Runnable {
                         // UPDATE_LIST <sender ID> <server list>
                         this.server.echoToNext("UPDATE_LIST " + this.server.getServerID() + " " + serverList);
                     } catch (IOException e) {
-                        System.out.println("Failed to close socket.");
+                        System.out.println(this.requestID + ": Failed to close socket.");
                         e.printStackTrace();
                     }
                 } else {
                     try {
                         this.NEGATIVE_ACK("Server ID already exists!");
                     } catch (IOException e) {
-                        System.out.println("Failed to close socket.");
+                        System.out.println(this.requestID + ": Failed to close socket.");
                         e.printStackTrace();
                     }
                 }
@@ -347,34 +390,121 @@ class RequestHandler implements Runnable {
                 if (senderID != this.server.getServerID()) { // ... and our server didn't send the message
 
                     try {
-                        this.ACKNOWLEDGE(null);
+
                         StringBuilder list = new StringBuilder();
-                        while (this.tokenizedRequestLine.hasMoreTokens()) {
+                        while (this.tokenizedRequestLine.hasMoreTokens()) { // read list
                             list.append(this.tokenizedRequestLine.nextToken()).append(" ");
                         }
-
+                        // update our server list
                         this.server.updateServerList(list.toString().split(","));
+                        // let the other servers know
                         this.server.echoToNext("UPDATE_LIST " + senderID + " " + list.toString());
                     } catch (IOException e) {
-                        System.out.println("Failed to close socket.");
+                        System.out.println(this.requestID + ": Failed to close socket.");
+                        e.printStackTrace();
+                    }
+                }
+                try {
+                    this.ACKNOWLEDGE(null);
+                } catch (IOException e) {
+                    System.out.println(this.requestID + ": Failed to close socket.");
+                    e.printStackTrace();
+                }
+                break;
+            }
+            case "PUT": { // PUT <filename>\n<TEXT>$$ (client request)
+                String filename = this.tokenizedRequestLine.nextToken();
+                try {
+                    // Save file and let the others know
+                    String text = this.saveFile(filename);
+                    this.server.echoToNext("UPDATE_FILES " + this.server.getServerID() + " " + filename + "\n" + text);
+                    this.ACKNOWLEDGE(null);
+                } catch (IOException e) {
+                    System.out.println(this.requestID + ": Client connection closed before parsing the whole message.");
+                    e.printStackTrace();
+                    try {
+                        this.NEGATIVE_ACK(null);
+                    } catch (IOException ioException) {
+                        ioException.printStackTrace();
+                    }
+                }
+                break;
+            }
+            case "GET": { // GET <filename>
+                String filename = this.tokenizedRequestLine.nextToken();
+                int senderID = -1;
+                if (this.tokenizedRequestLine.hasMoreTokens()) {
+                    senderID = Integer.parseInt(this.tokenizedRequestLine.nextToken());
+                }
+                System.out.println(this.requestID + ": Searching for file " + filename);
+                if (senderID != this.server.getServerID()) { // If our server didn't send the request
+                    if (senderID == -1) { // If client sent the request, the search starts from our server.
+                        senderID = this.server.getServerID();
+                    }
+                    if (this.server.containsFile(filename)) { // if we found the file
+                        try {
+                            System.out.println(this.requestID + ": File found on this server!");
+                            this.ACKNOWLEDGE(this.server.getFile(filename));
+                        } catch (IOException e) {
+                            System.out.println(this.requestID + ": Failed to send message to client.");
+                            e.printStackTrace();
+                        }
+                    } else { // if we didn't find the file on our server, ask the other guys.
+                        try {
+                            System.out.println(this.requestID + ": File not found on this server! I'll look on the next one.");
+                            this.server.sendRequest(this.server.echoToNext("GET " + filename + " " + senderID).trim(), outputStream);
+                        } catch (IOException e) {
+                            System.out.println(this.requestID + ": Could not connect with the next server.");
+                            e.printStackTrace();
+                        }
+                    }
+                } else { // if no one found the file, tell everyone that the file doesn't exist on the grid.
+                    try {
+                        System.out.println(this.requestID + ": File not found on the grid.");
+                        this.NEGATIVE_ACK("File not found.");
+                    } catch (IOException e) {
+                        System.out.println(this.requestID + ": Failed to close socket.");
                         e.printStackTrace();
                     }
                 }
                 break;
             }
-            case "HEALTHCHECK": // HEALTHCHECK
+            case "UPDATE_FILES": { // UPDATE_FILES <sender id> <filename>\n<text>&&
+                int senderId = Integer.parseInt(this.tokenizedRequestLine.nextToken());
+                String filename = this.tokenizedRequestLine.nextToken();
+                System.out.println(this.requestID + ": Sender ID: " + senderId);
+                try {
+                    if (senderId != this.server.getServerID()) {
+                        // If our server didn't send this request, update the saved file's contents and inform the others
+                        String text = this.saveFile(filename);
+                        this.server.echoToNext("UPDATE_FILES " + senderId + " " + filename + "\n" + text);
+                    }
+                    this.ACKNOWLEDGE(null);
+                } catch (IOException e) {
+                    System.out.println(this.requestID + ": Client connection closed before parsing the whole message.");
+                    e.printStackTrace();
+                    try {
+                        this.NEGATIVE_ACK(null);
+                    } catch (IOException ioException) {
+                        ioException.printStackTrace();
+                    }
+                }
+                break;
+
+            }
+            case "HEALTHCHECK": { // HEALTHCHECK - do nothing but reply ACK.
                 try {
                     this.ACKNOWLEDGE(null);
                 } catch (IOException e) {
-                    System.out.println("Failed to close socket.");
+                    System.out.println(this.requestID + ": Failed to close socket.");
                     e.printStackTrace();
                 }
 
                 break;
-
+            }
 
         }
-
+        System.out.println("Request #" + this.requestID + " finished successfully.");
 
     }
 
@@ -386,9 +516,10 @@ class RequestHandler implements Runnable {
     private void ACKNOWLEDGE(String s) throws IOException {
         this.outputStream.writeBytes("ACK\r\n");
         if (s != null) {
+            System.out.println("ACK " + s);
             this.outputStream.writeBytes(s + "\r\n");
         }
-
+        this.outputStream.writeBytes(WebServer.REQUEST_SUFFIX + "\r\n");
         socket.close();
     }
 
@@ -400,8 +531,30 @@ class RequestHandler implements Runnable {
     private void NEGATIVE_ACK(String s) throws IOException {
         this.outputStream.writeBytes("NAK\r\n");
         if (s != null) {
+            System.out.println("NAK " + s);
             this.outputStream.writeBytes(s + "\r\n");
         }
+        this.outputStream.writeBytes(WebServer.REQUEST_SUFFIX + "\r\n");
         socket.close();
+    }
+
+    /***
+     * Read client text and save file to the server hashmap.
+     * @param filename file's name
+     * @return input text from client
+     * @throws IOException if client socket closes.
+     */
+    private String saveFile(String filename) throws IOException {
+        StringBuilder text = new StringBuilder();
+        String line = this.fromClient.readLine();
+        while (!line.equals(WebServer.REQUEST_SUFFIX)) {
+            text.append(line).append("\n");
+            line = this.fromClient.readLine();
+        }
+        this.server.addFile(filename, text.toString());
+        System.out.println("Saving file " + filename + " with contents:");
+        System.out.println(text);
+        return text.toString();
+
     }
 }

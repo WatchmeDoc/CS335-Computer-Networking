@@ -25,5 +25,6 @@ Main:
 
 clean:
 	@rm -rf bin
+	@rm -f src/*.class
 	@clear
 
