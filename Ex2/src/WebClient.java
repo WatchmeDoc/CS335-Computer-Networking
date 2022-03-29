@@ -42,11 +42,9 @@ public class WebClient {
             System.out.println("No request provided");
             System.exit(2);
         }
-
-
-        Socket clientSocket = null;
+        
         try {
-            clientSocket = new Socket(host, port);
+            Socket clientSocket = new Socket(host, port);
             DataOutputStream outToServer =
                     new DataOutputStream(clientSocket.getOutputStream());
 
@@ -56,8 +54,10 @@ public class WebClient {
 
             // Send proper request and close socket
             if (request.equals("PUT")) {
+                // PUT <filename>
                 put_request(filePath, inFromServer, outToServer);
             } else if (request.equals("GET")) {
+                // GET <filename>
                 get_request(filePath, inFromServer, outToServer);
             }
 

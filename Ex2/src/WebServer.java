@@ -180,12 +180,17 @@ public class WebServer {
     }
 
     /***
-     * Change next serverID while updating the hashmap as well
+     * Change next serverID while updating the hashmap as well. If the next server ID is our server's ID,
+     * then it will update Next Server ID variable with -1.
      * @param nextServerID new adjacent server's ID.
      */
     void setNextServerID(int nextServerID) {
+        if(nextServerID == this.serverID){
+            nextServerID = -1;
+        }
         this.nextServerID = nextServerID;
         this.serverHashMap.get(this.serverID).nextServerID = nextServerID;
+
     }
 
     /***

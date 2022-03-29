@@ -37,7 +37,7 @@ public class Main {
         if (id <= 0) {
             System.out.println("Invalid ID provided. Please a positive integer.");
             System.exit(1);
-        } else if (port <= 0) {
+        } else if (port <= 1024) {
             System.out.println("Invalid port provided.");
             System.exit(1);
         }
