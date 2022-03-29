@@ -387,7 +387,7 @@ class RequestHandler implements Runnable {
                     }
                 } else {
                     try {
-                        this.NEGATIVE_ACK("Server ID already exists!");
+                        this.NEGATIVE_ACK("Server ID " + id + " already exists!");
                     } catch (IOException e) {
                         System.out.println(this.requestID + ": Failed to close socket.");
                         e.printStackTrace();
