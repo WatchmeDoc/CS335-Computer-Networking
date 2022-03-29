@@ -14,7 +14,7 @@ all: Main
 
 
 Main:
-	@rm -rf bin && cd src/ && javac Main.java && mkdir ../bin && mv *.class ../bin/ && cd ../
+	@rm -rf bin && cd src/ && javac Main.java && javac WebClient.java && mkdir ../bin && mv *.class ../bin/ && cd ../
 	@printf "\n-> Main.class successfully built in /bin\n"
 	@printf "\n-> Execute in bin directory using java Main -id N -p M\n"
 	@printf "\n-> Params: N = server ID, any positive Integer\n\t   M = server port, should be >1000\n"

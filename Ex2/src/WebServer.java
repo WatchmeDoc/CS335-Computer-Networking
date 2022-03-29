@@ -502,6 +502,13 @@ class RequestHandler implements Runnable {
 
                 break;
             }
+            default:
+                try {
+                    this.NEGATIVE_ACK("Unknown request.");
+                } catch (IOException e) {
+                    System.out.println(this.requestID + ": Failed to close socket.");
+                    e.printStackTrace();
+                }
 
         }
         System.out.println("Request #" + this.requestID + " finished successfully.");
