@@ -387,6 +387,8 @@ class RequestHandler implements Runnable {
                     }
                 } else {
                     try {
+                        System.out.println("Cannot add server. Server list:");
+                        System.out.println(this.server.getServerListString());
                         this.NEGATIVE_ACK("Server ID " + id + " already exists!");
                     } catch (IOException e) {
                         System.out.println(this.requestID + ": Failed to close socket.");
