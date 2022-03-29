@@ -387,8 +387,6 @@ class RequestHandler implements Runnable {
                     }
                 } else {
                     try {
-                        System.out.println("Cannot add server. Server list:");
-                        System.out.println(this.server.getServerListString());
                         this.NEGATIVE_ACK("Server ID " + id + " already exists!");
                     } catch (IOException e) {
                         System.out.println(this.requestID + ": Failed to close socket.");
@@ -410,6 +408,8 @@ class RequestHandler implements Runnable {
                         }
                         // update our server list
                         this.server.updateServerList(list.toString().split(","));
+                        System.out.println(this.requestID + ": Server list updated. New List:");
+                        System.out.println(this.server.getServerListString());
                         // let the other servers know
                         this.server.echoToNext("UPDATE_LIST " + senderID + " " + list.toString());
                     } catch (IOException e) {
@@ -536,7 +536,6 @@ class RequestHandler implements Runnable {
     private void ACKNOWLEDGE(String s) throws IOException {
         this.outputStream.writeBytes("ACK\r\n");
         if (s != null) {
-            System.out.println("ACK " + s);
             this.outputStream.writeBytes(s + "\r\n");
         }
         this.outputStream.writeBytes(WebServer.REQUEST_SUFFIX + "\r\n");
@@ -551,7 +550,6 @@ class RequestHandler implements Runnable {
     private void NEGATIVE_ACK(String s) throws IOException {
         this.outputStream.writeBytes("NAK\r\n");
         if (s != null) {
-            System.out.println("NAK " + s);
             this.outputStream.writeBytes(s + "\r\n");
         }
         this.outputStream.writeBytes(WebServer.REQUEST_SUFFIX + "\r\n");
