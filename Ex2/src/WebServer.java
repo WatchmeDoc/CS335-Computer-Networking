@@ -87,7 +87,11 @@ public class WebServer {
         output.writeBytes(request + "\r\n" + REQUEST_SUFFIX + "\r\n");
     }
 
-
+    /***
+     * Replace server list with the provided list
+     * @param list a string array where each node represents a server.
+     *             Each string must follow the following format: {<id> <port> <host> <next server>}
+     */
     public void updateServerList(String[] list) {
         this.serverHashMap.clear();
         for (String s : list) {
@@ -298,9 +302,11 @@ public class WebServer {
                 try {
                     Thread.sleep(sleepTime);
                     // HEALTHCHECK
-                    System.out.println("\nDoctor: I'll check on the next server.");
-                    String response = echoToNext("HEALTHCHECK");
-                    System.out.println("Doctor: Server responded \"" + response.trim() + "\"\n");
+                    if(nextServerID > 0){ // check if there is a next server to check.
+                        System.out.println("\nDoctor: I'll check on the next server.");
+                        String response = echoToNext("HEALTHCHECK");
+                        System.out.println("Doctor: Server responded \"" + response.trim() + "\"\n");
+                    }
                 } catch (InterruptedException e) {
                     System.out.println("WHOOOO DARES TO WAKE ME UP?!");
                     e.printStackTrace();

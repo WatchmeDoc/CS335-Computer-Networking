@@ -6,7 +6,7 @@ import java.nio.file.Paths;
 
 public class WebClient {
 
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args) {
         int port = 0;
         String host = "localhost";
         String request = null;
@@ -44,22 +44,29 @@ public class WebClient {
         }
 
 
-        Socket clientSocket = new Socket(host, port);
-        DataOutputStream outToServer =
-                new DataOutputStream(clientSocket.getOutputStream());
+        Socket clientSocket = null;
+        try {
+            clientSocket = new Socket(host, port);
+            DataOutputStream outToServer =
+                    new DataOutputStream(clientSocket.getOutputStream());
 
-        BufferedReader inFromServer =
-                new BufferedReader(new
-                        InputStreamReader(clientSocket.getInputStream()));
+            BufferedReader inFromServer =
+                    new BufferedReader(new
+                            InputStreamReader(clientSocket.getInputStream()));
 
-        // Send proper request and close socket
-        if (request.equals("PUT")) {
-            put_request(filePath, inFromServer, outToServer);
-        } else if (request.equals("GET")) {
-            get_request(filePath, inFromServer, outToServer);
+            // Send proper request and close socket
+            if (request.equals("PUT")) {
+                put_request(filePath, inFromServer, outToServer);
+            } else if (request.equals("GET")) {
+                get_request(filePath, inFromServer, outToServer);
+            }
+
+            clientSocket.close();
+        } catch (IOException e) {
+            System.out.println("Socket exception occurred:");
+            e.printStackTrace();
         }
 
-        clientSocket.close();
     }
 
     public static void put_request(String filePath, BufferedReader inFromServer, DataOutputStream outToServer) throws IOException {
