@@ -2,91 +2,54 @@
 
 Exercises for course CS335-Networks and Applications, Spring Semester 2022.
 
-## Getting started
-
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
-
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
-
-```
-cd existing_repo
-git remote add origin https://gitlab.com/watchmedoc/cs335-networks.git
-git branch -M main
-git push -uf origin main
-```
-
-## Integrate with your tools
-
-- [ ] [Set up project integrations](https://gitlab.com/watchmedoc/cs335-networks/-/settings/integrations)
-
-## Collaborate with your team
-
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Automatically merge when pipeline succeeds](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
-
-## Test and Deploy
-
-Use the built-in continuous integration in GitLab.
-
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing(SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
-
-***
-
-# Editing this README
-
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!).  Thank you to [makeareadme.com](https://www.makeareadme.com/) for this template.
-
-## Suggestions for a good README
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
-
-## Name
-Choose a self-explaining name for your project.
 
 ## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+Assignments for CS335-Networks and Applications course, from Computer Science Department of the University of Crete, taught by professor Kostantinos Magkoutis. 
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+### Assignment 1
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+In this assignment, we simply had to modify the provided code which establishes a communication between a client application and a Web Server. It is a toy example and mostly for educational purposes, while providing a simple taste of Web programming.
+
+### Assignment 2
+
+Now this is where things get interesting. Assignment 2 creates a grid of user-configured servers, where a client may request to store a file and its contents on the grid, as well as retrieve it later on. Inner server communication includes constant health checks, serving a join request whenever a new server wants to join the grid, as well as updating the server list of every node in the grid and whenever a client requests a file that 1 server node does not have, the server node must communicate with the rest of the grid and look up for the file. 
+
+Each request is assigned with an incremental ID for debugging purposes and better understanding. Threads are also used to serve requests and make periodic health checks on the grid. Prints originating from the request serving thread include the request ID, while prints originating from the health checking thread include the keyword "Doctor" on the very beginning of the message.
+
+This assignment, unlike the 1st one was built from scratch by me. Debugging was pretty fun since you had to handle several different processes, and each process had 2 different threads other than the main one. 
+
 
 ## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+Build this project using the provided Makefile in a bash shell. 
+
+```console
+foo@bar:.../cs335-networks/Ex2$ make
+```
+The make file provides sufficient info on how to create the server grid. Note that you configure the client/each server node via command line arguments when executing the equivalent .class file. Please make sure to provide sufficient arguments as OutOfBounds exceptions will be thrown if some of them are missing.
+
+After creating a server grid (localhost or not), to execute the client and make a request use:
+
+```console
+foo@bar:.../Ex2/bin$ java WebClient -p <port> -ip <host> -request <REQUEST> <filepath>
+```
+<REQUEST> can either be "GET" or "PUT", e.g.
+
+```console
+foo@bar:.../Ex2/bin$ java WebClient -p 4333 -request PUT test.txt
+```
+If -ip param is not included then the used host will be localhost.
 
 ## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+Need to refactor the 1st assignment - currently to configure the connecting host and port you have to change the code, which is obviously a bad practice.
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+In assignment 2, need to add an optional configuration for the health checking period (essentially the sleep time of the health checking thread)
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
 
 ## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
 
-## License
-For open source projects, say how it is licensed.
+As mentioned above, the 1st assignment was mainly built by the course's TAs while also including a code example from Networking: A Top-Down Approach Featuring the Internet, second edition (copyright 1996-2002 J.F Kurose and K.W. Ross, All Rights Reserved) and was modified by me so it works on a loop. The 2nd assignment was built from scratch by me. 
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+
